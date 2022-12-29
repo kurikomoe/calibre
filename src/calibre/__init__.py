@@ -3,6 +3,8 @@ __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
+print("Modified by kuriko")
+
 import sys, os, re, time, warnings
 from polyglot.builtins import codepoint_to_chr, hasenv, native_string_type
 from math import floor
