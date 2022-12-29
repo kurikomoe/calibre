@@ -38,6 +38,12 @@ def ascii_filename(orig, substitute='_'):
     ans = ''.join(x if ord(x) >= 32 else substitute for x in orig)
     return sanitize_file_name(ans, substitute=substitute)
 
+# FIXME(kuriko): use safe_filename to replace the ascii escape method
+def safe_filename(filename):
+    import re
+    return re.sub(r"[\/\\\:\*\?\"\<\>\|]", "_", filename)
+
+ascii_filename = safe_filename
 
 def shorten_component(s, by_what):
     l = len(s)

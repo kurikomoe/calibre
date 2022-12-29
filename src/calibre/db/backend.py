@@ -1780,6 +1780,7 @@ class DB:
         return size, fname
 
     def update_path(self, book_id, title, author, path_field, formats_field):
+        print(f"Updating: {title}")
         current_path = path_field.for_book(book_id, default_value='')
         path = self.construct_path_name(book_id, title, author)
         formats = formats_field.for_book(book_id, default_value=())
@@ -1790,7 +1791,8 @@ class DB:
         fname = self.construct_file_name(book_id, title, author, extlen)
 
         def rename_format_files():
-            changed = False
+            # FIXME(kuriko): force update the titles to convert all old ascii filenames to new utf-8 name
+        changed = True
             for fmt in formats:
                 name = formats_field.format_fname(book_id, fmt)
                 if name and name != fname:

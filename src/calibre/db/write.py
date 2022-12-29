@@ -201,7 +201,9 @@ def one_one_in_books(book_id_val_map, db, field, *args):
     # the presence-of-cover flag changing
     if field.name != 'cover':
         g = field.table.book_col_map.get
-        book_id_val_map = {k:v for k, v in book_id_val_map.items() if v != g(k, missing)}
+        # FIXME(kuriko): force update all items whether changed or not
+        #  book_id_val_map = {k:v for k, v in book_id_val_map.items() if v != g(k, missing)}
+        book_id_val_map = {k:v for k, v in book_id_val_map.items()}
     if book_id_val_map:
         sequence = ((sqlite_datetime(v), k) for k, v in book_id_val_map.items())
         db.executemany(
