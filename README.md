@@ -3,11 +3,14 @@
 ## Usage
 ### Installation
 
-1. 下载 release 的压缩包
-   1. 压缩包中包含 src, calibre-windows.bat, calibre-linux.bat
+1. 下载 release 的[压缩包](https://github.com/kurikomoe/calibre-utf8-path/releases/tag/v6.10.0)
+   1. 压缩包中包含 src, resources, calibre-windows.bat, calibre-linux.bat
+   2. 对于 Linux 党，可以直接下载编译好的 binary，见 release
 2. 分平台安装说明：
-   1. 对于 Windows 党，将压缩包内容解压到 calibre 程序目录，即 src, resources，bat，sh 文件位于 calibre.exe 同级目录），如图：
-   2. 对于 Linux 党，path 中可以搜索到 calibre，所以放在哪儿都行。
+   1. 对于 Linux 党，path 中可以搜索到 calibre，所以放在哪儿都行。
+   2. 对于 Windows 党，将压缩包内容解压到 calibre 程序目录，即 src, resources，bat，sh 文件位于 calibre.exe 同级目录），如图：
+       <img width="473" alt="image" src="https://user-images.githubusercontent.com/31176859/210058802-3126372a-8175-49cb-897a-ea85fa4a0dd2.png">
+       
 3. 执行 calibre-{windows.bat|linux.sh}
 
 
