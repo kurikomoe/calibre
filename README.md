@@ -6,7 +6,7 @@
 1. 下载 release 的压缩包
    1. 压缩包中包含 src, calibre-windows.bat, calibre-linux.bat
 2. 分平台安装说明：
-   1. 对于 Windows 党，将压缩包内容解压到 calibre 程序目录，即 src，bat，sh 文件位于 calibre.exe 同级目录），如图：
+   1. 对于 Windows 党，将压缩包内容解压到 calibre 程序目录，即 src, resources，bat，sh 文件位于 calibre.exe 同级目录），如图：
    2. 对于 Linux 党，path 中可以搜索到 calibre，所以放在哪儿都行。
 3. 执行 calibre-{windows.bat|linux.sh}
 
@@ -55,10 +55,9 @@
 ### 缺陷和不足
 
 1. 由于为了兼容批量修改已有书籍的名字，因此绕过了 calibre 原有的对于未经变动的元数据进行略过的代码，因此以后所有 metadata 更新都会对所有`被选中`的书籍执行。
-2. 仅在 Linux 系统验证通过。
-3. 采用 utf-8 存储书名，未经 windows 其他编码验证（中文系统的 gbk），可能存在问题。
-4. 采用 dev 模式运行，效率下降。
-5. 其他可能的未知问题
+2. 采用 utf-8 存储书名，未经 windows 其他编码验证（中文系统的 gbk），可能存在问题。
+3. 采用 dev 模式运行，效率下降。
+4. 其他可能的未知问题
 
 ## 原理说明
 

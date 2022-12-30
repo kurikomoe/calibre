@@ -1,9 +1,12 @@
-@Echo off
+@echo off
 
-Set "RootDir=%~d0\"
+set _ROOT=%~dp0src
 
-Echo Injecting calibre from %ROOT%
+echo Injecting calibre from %_ROOT%
 
-Set CALIBRE_DEVELOP_FROM=%ROOT%\src
+set CALIBRE_DEVELOP_FROM=%_ROOT%
+
+REM For Debug Output
+REM calibre-debug.exe -g
 
 calibre.exe
