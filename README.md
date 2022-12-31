@@ -3,7 +3,7 @@
 ## Usage
 ### Installation
 
-1. 下载 release 的[压缩包](https://github.com/kurikomoe/calibre-utf8-path/releases/tag/v6.10.0)
+1. 下载 release 的[压缩包](https://github.com/kurikomoe/calibre-utf8-path/releases/latest)
    1. 压缩包中包含 src, resources, calibre-windows.bat, calibre-linux.bat
    2. 对于 Linux 党，可以直接下载编译好的 binary，见 release
 2. 分平台安装说明：
