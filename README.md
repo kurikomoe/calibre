@@ -9,6 +9,7 @@
 2. 分平台安装说明：
    1. 对于 Linux 党，path 中可以搜索到 calibre，所以放在哪儿都行。
    2. 对于 Windows 党，将压缩包内容解压到 calibre 程序目录，即 src, resources，bat，sh 文件位于 calibre.exe 同级目录），如图：
+   
        <img width="473" alt="image" src="https://user-images.githubusercontent.com/31176859/210058802-3126372a-8175-49cb-897a-ea85fa4a0dd2.png">
        
 3. 执行 calibre-{windows.bat|linux.sh}
