@@ -2,6 +2,16 @@
 # vim:fileencoding=utf-8
 # License: GPLv3 Copyright: 2016, Kovid Goyal <kovid at kovidgoyal.net>
 
+import sys
+sys.path.append("/data/Projects/Git/bypy/")
+sys.path.append("/data/Projects/Git/calibre/bypy/")
+print(sys.path)
+
+import init_env
+
+calibre_constants = init_env.initialize_constants()
+
+
 import errno
 import glob
 import os
@@ -22,6 +32,7 @@ from bypy.utils import (
     create_job, get_dll_path, mkdtemp, parallel_build, py_compile, run, walk
 )
 
+
 j = os.path.join
 self_dir = os.path.dirname(os.path.abspath(__file__))
 machine = (os.uname()[4] or '').lower()
@@ -29,11 +40,12 @@ arch = 'x86_64'
 if machine.startswith('arm') or machine.startswith('aarch64'):
     arch = 'arm64'
 py_ver = '.'.join(map(str, python_major_minor_version()))
+print(py_ver)
 QT_PREFIX = os.path.join(PREFIX, 'qt')
 iv = globals()['init_env']
-calibre_constants = iv['calibre_constants']
-QT_DLLS, QT_PLUGINS, PYQT_MODULES = iv['QT_DLLS'], iv['QT_PLUGINS'], iv['PYQT_MODULES']
-qt_get_dll_path = partial(get_dll_path, loc=os.path.join(QT_PREFIX, 'lib'))
+#  calibre_constants = iv['calibre_constants']
+#  QT_DLLS, QT_PLUGINS, PYQT_MODULES = iv['QT_DLLS'], iv['QT_PLUGINS'], iv['PYQT_MODULES']
+#  qt_get_dll_path = partial(get_dll_path, loc=os.path.join(QT_PREFIX, 'lib'))
 
 
 def binary_includes():
@@ -84,6 +96,7 @@ class Env:
 
 
 def ignore_in_lib(base, items, ignored_dirs=None):
+    from pathlib import Path
     ans = []
     if ignored_dirs is None:
         ignored_dirs = {'.svn', '.bzr', '.git', 'test', 'tests', 'testing'}
@@ -94,27 +107,30 @@ def ignore_in_lib(base, items, ignored_dirs=None):
                 if name != 'plugins':
                     ans.append(name)
         else:
-            if name.rpartition('.')[-1] not in ('so', 'py'):
+            if Path(name).suffix not in ('.so', '.py'):
                 ans.append(name)
     return ans
 
 
 def import_site_packages(srcdir, dest):
+    print("importing from: ", srcdir)
     if not os.path.exists(dest):
         os.mkdir(dest)
+
     for x in os.listdir(srcdir):
-        ext = x.rpartition('.')[-1]
+        from pathlib import Path
+        ext = Path(x).suffix
         f = j(srcdir, x)
-        if ext in ('py', 'so'):
-            shutil.copy2(f, dest)
-        elif ext == 'pth' and x != 'setuptools.pth':
+        print(f"something with: {f}")
+        if ext in ('.py', '.so'):
+            shutil.copy(f, dest)
+        elif ext == '.pth' and x != 'setuptools.pth':
             for line in open(f, 'rb').read().decode('utf-8').splitlines():
                 src = os.path.abspath(j(srcdir, line))
                 if os.path.exists(src) and os.path.isdir(src):
                     import_site_packages(src, dest)
         elif os.path.exists(j(f, '__init__.py')):
             shutil.copytree(f, j(dest, x), ignore=ignore_in_lib)
-
 
 def copy_libs(env):
     print('Copying libs...')
@@ -138,21 +154,32 @@ def copy_libs(env):
 
 
 def copy_python(env, ext_dir):
+    ext_dir = "/home/kuriko/.pyenv/versions/calibre/lib/python3.10/"
+    #  ext_dir = "/home/kuriko/.pyenv/versions/3.10.9/lib"
     print('Copying python...')
-    srcdir = j(PREFIX, 'lib/python' + py_ver)
+    #  srcdir = j(PREFIX, 'lib/python' + py_ver)
+    #  srcdir = j("/home/kuriko/.pyenv/versions/3.10.9/lib/python3.10", 'bin/python' + py_ver)
+    #  srcdir = j("/usr/lib/python3.10")
+    srcdir = j("/home/kuriko/.pyenv/versions/3.10.9/lib/python3.10")
+    print("srcdir: ", srcdir)
 
     for x in os.listdir(srcdir):
         y = j(srcdir, x)
         ext = os.path.splitext(x)[1]
         if os.path.isdir(y) and x not in ('test', 'hotshot',
                                           'site-packages', 'idlelib', 'dist-packages'):
+            #  shutil.copytree(y, j(env.py_dir, x))
             shutil.copytree(y, j(env.py_dir, x), ignore=ignore_in_lib)
         if os.path.isfile(y) and ext in ('.py', '.so'):
             shutil.copy2(y, env.py_dir)
 
-    srcdir = j(srcdir, 'site-packages')
+    #  srcdir = j(srcdir, 'site-packages')
+    srcdir = j("/home/kuriko/.pyenv/versions/calibre/lib/python3.10/site-packages")
     dest = j(env.py_dir, 'site-packages')
+    print(srcdir)
+    print(dest)
     import_site_packages(srcdir, dest)
+    print("after import site packages")
 
     for x in os.listdir(env.SRC):
         c = j(env.SRC, x)
@@ -161,10 +188,10 @@ def copy_python(env, ext_dir):
         elif os.path.isfile(c):
             shutil.copy2(c, j(dest, x))
     shutil.copytree(j(env.src_root, 'resources'), j(env.base, 'resources'))
-    for pak in glob.glob(j(QT_PREFIX, 'resources', '*.pak')):
-        shutil.copy2(pak, j(env.base, 'resources'))
-    os.mkdir(j(env.base, 'translations'))
-    shutil.copytree(j(QT_PREFIX, 'translations', 'qtwebengine_locales'), j(env.base, 'translations', 'qtwebengine_locales'))
+    #  for pak in glob.glob(j(QT_PREFIX, 'resources', '*.pak')):
+    #      shutil.copy2(pak, j(env.base, 'resources'))
+    #  os.mkdir(j(env.base, 'translations'))
+    #  shutil.copytree(j(QT_PREFIX, 'translations', 'qtwebengine_locales'), j(env.base, 'translations', 'qtwebengine_locales'))
     sitepy = j(self_dir, 'site.py')
     shutil.copy2(sitepy, j(env.py_dir, 'site.py'))
 
@@ -173,8 +200,9 @@ def copy_python(env, ext_dir):
         os.mkdir(pdir)
     fix_pycryptodome(j(env.py_dir, 'site-packages'))
     for x in os.listdir(j(env.py_dir, 'site-packages')):
-        os.rename(j(env.py_dir, 'site-packages', x), j(env.py_dir, x))
-    os.rmdir(j(env.py_dir, 'site-packages'))
+        print(j(env.py_dir, 'site-packages', x), " -> ", j(env.py_dir, x))
+        shutil.move(j(env.py_dir, 'site-packages', x), j(env.py_dir, x))
+    #  os.rmdir(j(env.py_dir, 'site-packages'))
     print('Extracting extension modules from', ext_dir, 'to', pdir)
     ext_map = extract_extension_modules(ext_dir, pdir)
     shutil.rmtree(j(env.py_dir, 'calibre', 'plugins'))
@@ -182,7 +210,7 @@ def copy_python(env, ext_dir):
     ext_map.update(extract_extension_modules(env.py_dir, pdir))
     py_compile(env.py_dir)
     freeze_python(env.py_dir, pdir, env.obj_dir, ext_map, develop_mode_env_var='CALIBRE_DEVELOP_FROM')
-    shutil.rmtree(env.py_dir)
+    #  shutil.rmtree(env.py_dir)
 
 
 def build_launchers(env):
@@ -194,6 +222,7 @@ def build_launchers(env):
     cflags += [f'-I{path_to_freeze_dir()}', f'-I{env.obj_dir}']
     for src, obj in zip(sources, objects):
         cmd = ['gcc'] + cflags + ['-fPIC', '-o', obj, src]
+        print(cmd)
         run(*cmd)
 
     dll = j(env.lib_dir, 'libcalibre-launcher.so')
@@ -304,18 +333,20 @@ def create_tarfile(env, compression_level='9'):
 
 
 def main():
-    args = globals()['args']
-    ext_dir = globals()['ext_dir']
-    run_tests = iv['run_tests']
+    #  args = globals()['args']
+    #  ext_dir = globals()['ext_dir']
+    #  ext_dir = "/usr/lib/python3.10"
+    ext_dir = "/home/kuriko/.pyenv/versions/calibre/lib/python3.10/"
+    #  run_tests = iv['run_tests']
     env = Env()
-    copy_libs(env)
+    #  copy_libs(env)
     copy_python(env, ext_dir)
     build_launchers(env)
-    if not args.skip_tests:
-        run_tests(j(env.base, 'calibre-debug'), env.base)
-    if not args.dont_strip:
-        strip_binaries(env)
-    create_tarfile(env, args.compression_level)
+    # if not args.skip_tests:
+    #     run_tests(j(env.base, 'calibre-debug'), env.base)
+    # if not args.dont_strip:
+    #     strip_binaries(env)
+    # create_tarfile(env, args.compression_level)
 
 
 if __name__ == '__main__':

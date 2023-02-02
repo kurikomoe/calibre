@@ -1,0 +1,155 @@
+From b8628f1f706cf10fb92bd7e06a3d83c62545d8b9 Mon Sep 17 00:00:00 2001
+From: Kuriko Moe <kurikomoe@gmail.com>
+Date: Thu, 2 Feb 2023 11:19:37 +0800
+Subject: [PATCH] proof of concept
+
+---
+ bypy/chroot.py          | 1 +
+ bypy/constants.py       | 9 +++++----
+ bypy/freeze/__init__.py | 6 ++++--
+ bypy/freeze/importer.py | 1 +
+ bypy/pkgs/unrar.py      | 8 ++++----
+ virtual_machine/run.py  | 4 ++--
+ 6 files changed, 17 insertions(+), 12 deletions(-)
+
+diff --git a/bypy/chroot.py b/bypy/chroot.py
+index 8c110ce..5a54633 100644
+--- a/bypy/chroot.py
++++ b/bypy/chroot.py
+@@ -159,6 +159,7 @@ class Chroot:
+         files = []
+         try:
+             ssh_authorized_keys = [x.strip() for x in open(os.path.expanduser('~/.ssh/authorized_keys'))]
++            print(ssh_authorized_keys)
+         except FileNotFoundError:
+             ssh_authorized_keys = []
+ 
+diff --git a/bypy/constants.py b/bypy/constants.py
+index 32e2812..d6856e7 100644
+--- a/bypy/constants.py
++++ b/bypy/constants.py
+@@ -42,18 +42,19 @@ OUTPUT_DIR = os.path.join(SW, 'dist')
+ WORKER_DIR = os.path.join(SW, 'worker')
+ PKG = os.path.join(SW, 'pkg')
+ BYPY = os.path.join(ROOT, 'bypy')
+-SRC = os.path.join(ROOT, 'src')
++SRC = os.path.join(ROOT, 'calibre')
+ OS_NAME = 'windows' if iswindows else ('macos' if ismacos else 'linux')
+ SOURCES = os.path.join(ROOT, 'sources')
+ PATCHES = os.path.join(BYPY, 'patches')
+ SH = 'C:/cygwin64/bin/zsh' if iswindows else '/bin/zsh'
+ if iswindows:
+     os.environ['TMPDIR'] = os.environ['TEMP'] = os.environ['TMP'] = tempfile.tempdir = r'C:\t\t'  # noqa
+-PREFIX = os.path.join(SW, 'sw')
++PREFIX = "/usr"
+ BIN = os.path.join(PREFIX, 'bin')
+ PYTHON = os.path.join(
+     PREFIX, 'private', 'python', 'python.exe') if iswindows else os.path.join(
+             BIN, 'python')
++#  PYTHON = "/home/kuriko/.pyenv/versions/3.10.9/bin/python"
+ cpu_count = os.cpu_count
+ MAKEOPTS = f'-j{cpu_count()}'
+ worker_env = {}
+@@ -155,14 +156,14 @@ def mkdtemp(prefix=''):
+ def current_build_arch(val=False):
+     if val is not False:
+         current_build_arch.ans = val
+-    return getattr(current_build_arch, 'ans', None)
++    return getattr(current_build_arch, 'ans', "x86_64")
+ 
+ 
+ def build_dir(newval=None, current_arch=None):
+     if newval is not None:
+         build_dir.ans = newval
+         current_build_arch(current_arch)
+-    return getattr(build_dir, 'ans', None)
++    return getattr(build_dir, 'ans', "x86_64")
+ 
+ 
+ def is_arm_half_of_lipo_build():
+diff --git a/bypy/freeze/__init__.py b/bypy/freeze/__init__.py
+index 0b9b11e..467d509 100644
+--- a/bypy/freeze/__init__.py
++++ b/bypy/freeze/__init__.py
+@@ -44,7 +44,7 @@ def remove_extension_suffix(name):
+     return name
+ 
+ 
+-def extract_extension_modules(src_dir, dest_dir, move=True):
++def extract_extension_modules(src_dir, dest_dir, move=False):
+     ext_map = {}
+ 
+     def extract_extension(path, root):
+@@ -61,7 +61,7 @@ def extract_extension_modules(src_dir, dest_dir, move=True):
+                 f'Cannot extract {fullname} into {dest_dir}, it already exists'
+             )
+         if move:
+-            os.rename(path, dest)
++            shutil.move(path, dest)
+         else:
+             shutil.copy2(path, dest)
+         bname, ext = dest.rpartition('.')[::2]
+@@ -250,6 +250,8 @@ def freeze_python(
+     path_to_user_env_vars='', remove_pyc_files=False
+ ):
+     files = collect_files_for_internment(base)
++    print(files)
++
+     frozen_file = os.path.join(dest_dir, 'python-lib.bypy.frozen')
+     index_data = {}
+     with open(frozen_file, 'wb') as frozen_file:
+diff --git a/bypy/freeze/importer.py b/bypy/freeze/importer.py
+index 8d44a5b..9cb4f5d 100644
+--- a/bypy/freeze/importer.py
++++ b/bypy/freeze/importer.py
+@@ -350,6 +350,7 @@ class BypyFrozenImporter:
+         self.dataloc = _path_join(self.libdir, 'python-lib.bypy.frozen')
+         self.filesystem_tree, self.extensions_map = marshal.loads(
+             initialize_data_access(self.dataloc))
++        #  print(self.filesystem_tree, self.extensions_map)
+         self.develop_mode_path = None
+         if PATH_TO_USER_ENV_VARS:
+             try:
+diff --git a/bypy/pkgs/unrar.py b/bypy/pkgs/unrar.py
+index f2cb847..e831f03 100644
+--- a/bypy/pkgs/unrar.py
++++ b/bypy/pkgs/unrar.py
+@@ -27,10 +27,10 @@ def main(args):
+         flags = '-fPIC'
+         if ismacos:
+             replace_in_file('makefile', 'libunrar.so', 'libunrar.dylib')
+-            if is_arm_half_of_lipo_build():
+-                flags += f' -arch {current_build_arch()}'
++            #  if is_arm_half_of_lipo_build():
++            #      flags += f' -arch {current_build_arch()}'
+         replace_in_file('makefile', 'CXXFLAGS=', f'CXXFLAGS={flags} ')
+-        replace_in_file('makefile', 'LDFLAGS=', f'LDFLAGS=-arch {current_build_arch()} ')
+-        run('make -j4 lib')
++        #  replace_in_file('makefile', 'LDFLAGS=', f'LDFLAGS=-arch {current_build_arch()} ')
++        run('make -j24 lib')
+         install_binaries('libunrar.' + ('dylib' if ismacos else 'so'), 'lib')
+     copy_headers('*.hpp', destdir='include/unrar')
+diff --git a/virtual_machine/run.py b/virtual_machine/run.py
+index 3e22825..566376e 100644
+--- a/virtual_machine/run.py
++++ b/virtual_machine/run.py
+@@ -16,14 +16,14 @@ from time import monotonic, sleep
+ is_running_remotely = False
+ monitor_template = '{}/monitor.socket'
+ machine_spec_template = '{}/machine-spec'
+-BUILD_VM_USER = 'kovid'
++BUILD_VM_USER = 'kuriko'
+ ssh_masters = set()
+ disable_known_hosts = ['-o', 'UserKnownHostsFile=/dev/null', '-o', 'StrictHostKeyChecking=no', '-o', 'LogLevel=ERROR']
+ 
+ try:
+     import pwd
+ except ModuleNotFoundError:
+-    USER = os.environ.get('USER', 'kovid')
++    USER = os.environ.get('USER', "kovid")
+ else:
+     USER = pwd.getpwuid(os.geteuid()).pw_name
+ 
+-- 
+2.39.1
+

@@ -460,7 +460,10 @@ class MobiWriter:
         title = ascii_filename(str(self.oeb.metadata.title[0])).replace(
                 ' ', '_')
         if not isinstance(title, bytes):
-            title = title.encode('ascii')
+            try:
+                title = title.encode('ascii')
+            except:
+                title = title.encode('utf-8')
         title = title[:31]
         title = title + (b'\0' * (32 - len(title)))
         now = int(time.time())

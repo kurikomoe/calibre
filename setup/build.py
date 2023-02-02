@@ -312,6 +312,7 @@ class Build(Command):
         if opts.no_compile:
             self.info('--no-compile specified, skipping compilation')
             return
+        print("RUNNING")
         self.env = init_env(debug=opts.debug)
         all_extensions = map(parse_extension, filter(is_ext_allowed, read_extensions()))
         self.build_dir = os.path.abspath(opts.build_dir or self.DEFAULT_BUILDDIR)

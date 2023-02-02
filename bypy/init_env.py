@@ -2,6 +2,10 @@
 # vim:fileencoding=utf-8
 # License: GPL v3 Copyright: 2019, Kovid Goyal <kovid at kovidgoyal.net>
 
+import sys
+sys.path.append("/data/Projects/Git/bypy/")
+print(sys.path)
+
 import json
 import os
 import re
@@ -105,6 +109,7 @@ def read_cal_file(name):
 
 
 def initialize_constants():
+    global calibre_constants
     calibre_constants = {}
     src = read_cal_file('constants.py')
     nv = re.search(r'numeric_version\s+=\s+\((\d+), (\d+), (\d+)\)', src)
