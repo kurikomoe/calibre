@@ -1,6 +1,9 @@
 # Calibre 中文文件名修正
 
 ## Usage
+
+**注意，如果是全新安装的 calibre，首次启动必须用原本的 exe**
+
 ### Installation
 
 1. 下载 release 的[压缩包](https://github.com/kurikomoe/calibre-utf8-path/releases/latest)
@@ -13,7 +16,6 @@
        <img width="473" alt="image" src="https://user-images.githubusercontent.com/31176859/210058802-3126372a-8175-49cb-897a-ea85fa4a0dd2.png">
        
 3. 执行 calibre-{windows.bat|linux.sh}
-
 
 ### Pre-Update
 ! 风险提示 !
