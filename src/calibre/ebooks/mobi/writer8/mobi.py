@@ -331,7 +331,7 @@ class KF8Book:
 
             title = ascii_filename(self.full_title.decode('utf-8')).replace(' ', '_')
             if not isinstance(title, bytes):
-                title = title.encode('ascii')
+                title = title.encode('utf-8')
             title = title[:31]
             title += (b'\0' * (32 - len(title)))
             now = int(time.time())

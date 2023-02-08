@@ -189,10 +189,10 @@ def create_profile():
         # Qt bugs see workaround_qt_bug() in ajax.pyj
         ua = f'calibre-viewer {__version__} {osname}'
         ans.setHttpUserAgent(ua)
-        if is_running_from_develop:
-            from calibre.utils.rapydscript import compile_viewer
-            prints('Compiling viewer code...')
-            compile_viewer()
+        # if is_running_from_develop:
+        #     from calibre.utils.rapydscript import compile_viewer
+        #     prints('Compiling viewer code...')
+        #     compile_viewer()
         js = P('viewer.js', data=True, allow_user_override=False)
         translations_json = get_translations_data() or b'null'
         js = js.replace(b'__TRANSLATIONS_DATA__', translations_json, 1)
