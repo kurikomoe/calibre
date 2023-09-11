@@ -1792,7 +1792,7 @@ class DB:
 
         def rename_format_files():
             # FIXME(kuriko): force update the titles to convert all old ascii filenames to new utf-8 name
-        changed = True
+            changed = True
             for fmt in formats:
                 name = formats_field.format_fname(book_id, fmt)
                 if name and name != fname:
