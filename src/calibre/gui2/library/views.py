@@ -13,12 +13,14 @@ from qt.core import (
     QAbstractItemView, QDialog, QDialogButtonBox, QDrag, QEvent, QFont, QFontMetrics,
     QGridLayout, QHeaderView, QIcon, QItemSelection, QItemSelectionModel, QLabel, QMenu,
     QMimeData, QModelIndex, QPoint, QPushButton, QSize, QSpinBox, QStyle,
-    QStyleOptionHeader, Qt, QTableView, QUrl, pyqtSignal,
+    QStyleOptionHeader, Qt, QTableView, QTimer, QUrl, pyqtSignal,
 )
 
 from calibre import force_unicode
 from calibre.constants import filesystem_encoding, islinux
-from calibre.gui2 import FunctionDispatcher, error_dialog, gprefs
+from calibre.gui2 import (
+    BOOK_DETAILS_DISPLAY_DEBOUNCE_DELAY, FunctionDispatcher, error_dialog, gprefs,
+)
 from calibre.gui2.dialogs.enum_values_edit import EnumValuesEdit
 from calibre.gui2.gestures import GestureManager
 from calibre.gui2.library import DEFAULT_SORT
@@ -27,9 +29,9 @@ from calibre.gui2.library.alternate_views import (
 )
 from calibre.gui2.library.delegates import (
     CcBoolDelegate, CcCommentsDelegate, CcDateDelegate, CcEnumDelegate,
-    CcLongTextDelegate, CcMarkdownDelegate, CcNumberDelegate, CcSeriesDelegate, CcTemplateDelegate,
-    CcTextDelegate, CompleteDelegate, DateDelegate, LanguagesDelegate, PubDateDelegate,
-    RatingDelegate, SeriesDelegate, TextDelegate,
+    CcLongTextDelegate, CcMarkdownDelegate, CcNumberDelegate, CcSeriesDelegate,
+    CcTemplateDelegate, CcTextDelegate, CompleteDelegate, DateDelegate,
+    LanguagesDelegate, PubDateDelegate, RatingDelegate, SeriesDelegate, TextDelegate,
 )
 from calibre.gui2.library.models import BooksModel, DeviceBooksModel
 from calibre.gui2.pin_columns import PinTableView
@@ -361,9 +363,10 @@ class BooksView(QTableView):  # {{{
             elif tval == 'open_viewer':
                 wv.setEditTriggers(QAbstractItemView.EditTrigger.SelectedClicked|wv.editTriggers())
                 wv.doubleClicked.connect(parent.iactions['View'].view_triggered)
-            elif tval == 'show_book_details':
+            elif tval in ('show_book_details', 'show_locked_book_details'):
                 wv.setEditTriggers(QAbstractItemView.EditTrigger.SelectedClicked|wv.editTriggers())
-                wv.doubleClicked.connect(parent.iactions['Show Book Details'].show_book_info)
+                wv.doubleClicked.connect(partial(parent.iactions['Show Book Details'].show_book_info,
+                                                 locked=tval == 'show_locked_book_details'))
             elif tval == 'edit_metadata':
                 # Must not enable single-click to edit, or the field will remain
                 # open in edit mode underneath the edit metadata dialog
@@ -500,12 +503,6 @@ class BooksView(QTableView):  # {{{
             gprefs['book_list_split'] = self.pin_view.isVisible()
             self.save_state()
             return
-        if action in ('lock', 'unlock'):
-            val = action == 'unlock'
-            self.column_header.setSectionsMovable(val)
-            self.pin_view.column_header.setSectionsMovable(val)
-            gprefs.set('allow_column_movement_with_mouse', val)
-
         if not action or not column or not view:
             return
         try:
@@ -514,7 +511,12 @@ class BooksView(QTableView):  # {{{
             return
         h = view.column_header
 
-        if action == 'hide':
+        if action == 'lock':
+            val = not view.column_header.sectionsMovable()
+            self.column_header.setSectionsMovable(val)
+            self.pin_view.column_header.setSectionsMovable(val)
+            gprefs.set('allow_column_movement_with_mouse', val)
+        elif action == 'hide':
             if h.hiddenSectionCount() >= h.count():
                 return error_dialog(self, _('Cannot hide all columns'), _(
                     'You must not hide all columns'), show=True)
@@ -690,23 +692,13 @@ class BooksView(QTableView):  # {{{
                 ac.setText(_('Un-split the book list'))
             else:
                 ac.setText(_('Split the book list'))
-                # QIcon.ic('drm-locked.png'),
-            if not hasattr(m, 'column_mouse_move_action'):
-                m.column_mouse_move_action = m.addAction('xxx')
 
-            def set_action_attributes(icon, text, slot):
-                m.column_mouse_move_action.setText(text)
-                m.column_mouse_move_action.setIcon(icon)
-                m.column_mouse_move_action.triggered.connect(slot)
-
-            if view.column_header.sectionsMovable():
-                set_action_attributes(QIcon.ic('drm-locked.png'),
-                                      _("Don't allow moving columns with the mouse"),
-                                      partial(self.column_header_context_handler, action='lock'))
-            else:
-                set_action_attributes(QIcon.ic('drm-unlocked.png'),
-                                      _("Allow moving columns with the mouse"),
-                                      partial(self.column_header_context_handler, action='unlock'))
+            ac = getattr(m, 'column_mouse_move_action', None)
+            if ac is None:
+                ac = m.column_mouse_move_action = m.addAction(_("Allow moving columns with the mouse"),
+                          partial(self.column_header_context_handler, action='lock', column=col, view=view))
+                ac.setCheckable(True)
+            ac.setChecked(view.column_header.sectionsMovable())
         if has_context_menu:
             view.column_header_context_menu.popup(view.column_header.mapToGlobal(pos))
     # }}}
@@ -1625,7 +1617,20 @@ class BooksView(QTableView):  # {{{
             self._model.search_done.connect(self.alternate_views.restore_current_book_state)
 
     def connect_to_book_display(self, bd):
-        self._model.new_bookdisplay_data.connect(bd)
+        self.book_display_callback = bd
+        self.connect_to_book_display_timer = t = QTimer(self)
+        t.setSingleShot(True)
+        t.timeout.connect(self._debounce_book_display)
+        t.setInterval(BOOK_DETAILS_DISPLAY_DEBOUNCE_DELAY)
+        self._model.new_bookdisplay_data.connect(self._timed_connect_to_book_display)
+
+    def _timed_connect_to_book_display(self, data):
+        self._book_display_data = data
+        self.connect_to_book_display_timer.start()
+
+    def _debounce_book_display(self):
+        data, self._book_display_data = self._book_display_data, None
+        self.book_display_callback(data)
 
     def search_done(self, ok):
         self._search_done(self, ok)

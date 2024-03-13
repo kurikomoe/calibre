@@ -20,11 +20,13 @@ from contextlib import suppress
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from functools import partial
+from lxml import html
 from math import ceil, floor, modf, trunc
 
 from calibre import human_readable, prepare_string_for_xml, prints
 from calibre.constants import DEBUG
 from calibre.db.constants import DATA_DIR_NAME, DATA_FILE_PATTERN
+from calibre.db.notes.exim import parse_html, expand_note_resources
 from calibre.ebooks.metadata import title_sort
 from calibre.utils.config import tweaks
 from calibre.utils.date import UNDEFINED_DATE, format_date, now, parse_date
@@ -1285,6 +1287,40 @@ class BuiltinFormatDate(BuiltinFormatterFunction):
         return s
 
 
+class BuiltinFormatDateField(BuiltinFormatterFunction):
+    name = 'format_date_field'
+    arg_count = 2
+    category = 'Formatting values'
+    __doc__ = doc = _("format_date_field(field_name, format_string) -- format "
+            "the value in the field 'field_name', which must be the lookup name "
+            "of date field, either standard or custom. See 'format_date' for "
+            "the formatting codes. This function is much faster than format_date "
+            "and should be used when you are formatting the value in a field "
+            "(column). It can't be used for computed dates or dates in string "
+            "variables. Example: format_date_field('pubdate', 'yyyy.MM.dd')")
+
+    def evaluate(self, formatter, kwargs, mi, locals, field, format_string):
+        try:
+            if field not in mi.all_field_keys():
+                return _('Unknown field %s passed to function %s')%(field, 'format_date_field')
+            val = mi.get(field, None)
+            if val is None:
+                s = ''
+            elif format_string == 'to_number':
+                s = val.timestamp()
+            elif format_string.startswith('from_number'):
+                val = datetime.fromtimestamp(float(val))
+                f = format_string[12:]
+                s = format_date(val, f if f else 'iso')
+            else:
+                s = format_date(val, format_string)
+            return s
+        except:
+            traceback.print_exc()
+            s = 'BAD DATE'
+        return s
+
+
 class BuiltinUppercase(BuiltinFormatterFunction):
     name = 'uppercase'
     arg_count = 1
@@ -2012,6 +2048,29 @@ class BuiltinTransliterate(BuiltinFormatterFunction):
         return ascii_text(source)
 
 
+class BuiltinGetLink(BuiltinFormatterFunction):
+    name = 'get_link'
+    arg_count = 2
+    category = 'Template database functions'
+    __doc__ = doc = _("get_link(field_name, field_value) -- fetch the link for "
+                      "field 'field_name' with value 'field_value'. If there is "
+                      "no attached link, return ''. Example: "
+                      "get_link('tags', 'Fiction') returns the link attached to "
+                      "the tag 'Fiction'.")
+
+    def evaluate(self, formatter, kwargs, mi, locals, field_name, field_value):
+        db = self.get_database(mi).new_api
+        try:
+            link = None
+            item_id = db.get_item_id(field_name, field_value)
+            if item_id is not None:
+                link = db.link_for(field_name, item_id)
+            return link if link is not None else ''
+        except Exception as e:
+            traceback.print_exc()
+            raise ValueError(e)
+
+
 class BuiltinAuthorLinks(BuiltinFormatterFunction):
     name = 'author_links'
     arg_count = 2
@@ -2394,7 +2453,7 @@ class BuiltinBookValues(BuiltinFormatterFunction):
                 f = db.new_api.get_proxy_metadata(id_).get(column, None)
                 if isinstance(f, (tuple, list)):
                     s.update(f)
-                elif f:
+                elif f is not None:
                     s.add(str(f))
             return sep.join(s)
         except Exception as e:
@@ -2509,6 +2568,77 @@ class BuiltinExtraFileModtime(BuiltinFormatterFunction):
             raise ValueError(e)
 
 
+class BuiltinGetNote(BuiltinFormatterFunction):
+    name = 'get_note'
+    arg_count = 3
+    category = 'Template database functions'
+    __doc__ = doc = _("get_note(field_name, field_value, plain_text) -- fetch the "
+                      "note for field 'field_name' with value 'field_value'. If "
+                      "'plain_text' is empty, return the note's HTML. If 'plain_text' "
+                      "is non-empty, return the note's plain text. If the note "
+                      "doesn't exist, return '' in both cases. Example: "
+                      "get_note('tags', 'Fiction', '') returns the HTML of the "
+                      "note attached to the tag 'Fiction'.")
+
+    def evaluate(self, formatter, kwargs, mi, locals, field_name, field_value, plain_text):
+        db = self.get_database(mi).new_api
+        try:
+            note = ''
+            item_id = db.get_item_id(field_name, field_value)
+            if item_id is not None:
+                note_data = db.notes_data_for(field_name, item_id)
+                if note_data is not None:
+                    if plain_text == '1':
+                        return note['searchable_text'].partition('\n')[2]
+                    # Return the full HTML of the note, including all images as
+                    # data: URLs. Reason: non-exported note html contains
+                    # "calres://" URLs for images. These images won't render
+                    # outside the context of the library where the note "lives".
+                    # For example, they don't work in book jackets and book
+                    # details from a different library. They also don't work in
+                    # tooltips.
+
+                    # This code depends on the note being wrapped in <body> tags
+                    # by parse_html. The body is changed to a <div>. That means
+                    # we often end up with <div><div> or some such, but that is
+                    # OK
+                    root = parse_html(note_data['doc'])
+                    # There should be only one <body>
+                    root = root.xpath('//body')[0]
+                    # Change the body to a div
+                    root.tag = 'div'
+                    # Expand all the resources in the note
+                    root = expand_note_resources(root, db.get_notes_resource)
+                    note = html.tostring(root, encoding='unicode')
+            return note
+        except Exception as e:
+            traceback.print_exc()
+            raise ValueError(e)
+
+
+class BuiltinHasNote(BuiltinFormatterFunction):
+    name = 'has_note'
+    arg_count = 2
+    category = 'Template database functions'
+    __doc__ = doc = _("has_note(field_name, field_value) -- return '1' "
+                      "if the value 'field_value' in the field 'field_name' "
+                      "has an attached note, '' otherwise. Example: "
+                      "has_note('tags', 'Fiction') returns '1' if the tag "
+                      "'fiction' has an attached note, '' otherwise.")
+
+    def evaluate(self, formatter, kwargs, mi, locals, field_name, field_value):
+        db = self.get_database(mi).new_api
+        note = None
+        try:
+            item_id = db.get_item_id(field_name, field_value)
+            if item_id is not None:
+                note = db.notes_data_for(field_name, item_id)
+        except Exception as e:
+            traceback.print_exc()
+            raise ValueError(e)
+        return '1' if note is not None else ''
+
+
 _formatter_builtins = [
     BuiltinAdd(), BuiltinAnd(), BuiltinApproximateFormats(), BuiltinArguments(),
     BuiltinAssign(),
@@ -2522,10 +2652,11 @@ _formatter_builtins = [
     BuiltinExtraFileNames(), BuiltinExtraFileSize(), BuiltinExtraFileModtime(),
     BuiltinFirstNonEmpty(), BuiltinField(), BuiltinFieldExists(),
     BuiltinFinishFormatting(), BuiltinFirstMatchingCmp(), BuiltinFloor(),
-    BuiltinFormatDate(), BuiltinFormatNumber(), BuiltinFormatsModtimes(),
+    BuiltinFormatDate(), BuiltinFormatDateField(), BuiltinFormatNumber(), BuiltinFormatsModtimes(),
     BuiltinFormatsPaths(), BuiltinFormatsSizes(), BuiltinFractionalPart(),
-    BuiltinGlobals(), BuiltinHasExtraFiles(),
-    BuiltinHasCover(), BuiltinHumanReadable(), BuiltinIdentifierInList(),
+    BuiltinGetLink(),
+    BuiltinGetNote(), BuiltinGlobals(), BuiltinHasCover(), BuiltinHasExtraFiles(),
+    BuiltinHasNote(), BuiltinHumanReadable(), BuiltinIdentifierInList(),
     BuiltinIfempty(), BuiltinLanguageCodes(), BuiltinLanguageStrings(),
     BuiltinInList(), BuiltinIsMarked(), BuiltinListCountMatching(),
     BuiltinListDifference(), BuiltinListEquals(), BuiltinListIntersection(),

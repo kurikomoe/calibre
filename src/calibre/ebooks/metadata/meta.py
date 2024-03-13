@@ -12,7 +12,7 @@ from calibre.ebooks.metadata import MetaInformation, string_to_authors
 
 # The priorities for loading metadata from different file types
 # Higher values should be used to update metadata from lower values
-METADATA_PRIORITIES = collections.defaultdict(lambda:0)
+METADATA_PRIORITIES = collections.defaultdict(int)
 for i, ext in enumerate((
     'html', 'htm', 'xhtml', 'xhtm',
     'rtf', 'fb2', 'pdf', 'prc', 'odt',
@@ -230,11 +230,13 @@ def opf_metadata(opfpath):
 def forked_read_metadata(original_path, tdir):
     from calibre.ebooks.metadata.opf2 import metadata_to_opf
     from calibre.ebooks.metadata.worker import run_import_plugins
+    from calibre.utils.filenames import make_long_path_useable
+
     path = run_import_plugins((original_path,), os.getpid(), tdir)[0]
     if path != original_path:
         with open(os.path.join(tdir, 'file_changed_by_plugins'), 'w') as f:
             f.write(os.path.abspath(path))
-    with open(path, 'rb') as f:
+    with open(make_long_path_useable(path), 'rb') as f:
         fmt = os.path.splitext(path)[1][1:].lower()
         f.seek(0, 2)
         sz = f.tell()

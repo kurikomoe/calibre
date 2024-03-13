@@ -1,16 +1,18 @@
 [tool.ruff]
 line-length = 160
-target-version = 'py37'
-select = ['E', 'F']
-ignore = ['E741', 'E402', 'E722', 'E401']
+target-version = 'py38'
 builtins = ['_']
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint]
+ignore = ['E741', 'E402', 'E722', 'E401']
+select = ['E', 'F']
+
+[tool.ruff.lint.per-file-ignores]
 "src/calibre/ebooks/unihandecode/unicodepoints.py" = ["E501"]
 "src/qt/__init__.py" = ["E501"]
 
 [tool.black]
-target-version = ['py37']
+target-version = ['py38']
 
 [tool.isort]
 profile = "black"

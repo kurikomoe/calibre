@@ -21,9 +21,9 @@ from calibre.gui2 import error_dialog, is_dark_theme, safe_open_url
 from calibre.gui2.dialogs.confirm_delete import confirm
 from calibre.gui2.gestures import GestureManager
 from calibre.gui2.library.annotations import (
-    Details, Export as ExportBase, render_highlight_as_text, render_notes,
+    ChapterGroup, Details, Export as ExportBase, render_notes,
 )
-from calibre.gui2.viewer import link_prefix_for_location_links
+from calibre.gui2.viewer import get_boss, link_prefix_for_location_links
 from calibre.gui2.viewer.config import vprefs
 from calibre.gui2.viewer.search import SearchInput
 from calibre.gui2.viewer.shortcuts import get_shortcut_for, index_to_key_sequence
@@ -122,38 +122,6 @@ def decoration_for_style(palette, style, icon_size, device_pixel_ratio, is_dark)
     return ans
 
 
-class ChapterGroup:
-
-    def __init__(self, title='', level=0):
-        self.title = title
-        self.subgroups = {}
-        self.annotations = []
-        self.level = level
-
-    def add_annot(self, a):
-        titles = a.get('toc_family_titles', (_('Unknown chapter'),))
-        node = self
-        for title in titles:
-            node = node.group_for_title(title)
-        node.annotations.append(a)
-
-    def group_for_title(self, title):
-        ans = self.subgroups.get(title)
-        if ans is None:
-            ans = ChapterGroup(title, self.level+1)
-            self.subgroups[title] = ans
-        return ans
-
-    def render_as_text(self, lines, as_markdown, link_prefix):
-        if self.title:
-            lines.append('#' * self.level + ' ' + self.title)
-            lines.append('')
-        for hl in self.annotations:
-            render_highlight_as_text(hl, lines, as_markdown=as_markdown, link_prefix=link_prefix)
-        for sg in self.subgroups.values():
-            sg.render_as_text(lines, as_markdown, link_prefix)
-
-
 class Export(ExportBase):
     prefs = vprefs
     pref_name = 'highlight_export_format'
@@ -189,6 +157,7 @@ class Highlights(QTreeWidget):
     delete_requested = pyqtSignal()
     edit_requested = pyqtSignal()
     edit_notes_requested = pyqtSignal()
+    export_selected_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         QTreeWidget.__init__(self, parent)
@@ -225,6 +194,8 @@ class Highlights(QTreeWidget):
                 'Delete this highlight', 'Delete selected highlights', len(self.selectedItems())
             ), self.delete_requested.emit)
         m.addSeparator()
+        if tuple(self.selected_highlights):
+            m.addAction(QIcon.ic('save.png'), _('Export selected highlights'), self.export_selected_requested.emit)
         m.addAction(QIcon.ic('plus.png'), _('Expand all'), self.expandAll)
         m.addAction(QIcon.ic('minus.png'), _('Collapse all'), self.collapseAll)
         self.context_menu.popup(self.mapToGlobal(point))
@@ -249,7 +220,7 @@ class Highlights(QTreeWidget):
         self.uuid_map = {}
         highlights = (h for h in highlights if not h.get('removed') and h.get('highlighted_text'))
         smap = {}
-        title_counts = defaultdict(lambda : 0)
+        repeated_short_titles = defaultdict(set)
 
         @lru_cache
         def tooltip_for(tfam):
@@ -273,18 +244,20 @@ class Highlights(QTreeWidget):
                 lsec = h.get('lowest_level_section_title')
                 key = (tsec or '', lsec or '')
             short_title = lsec or tsec or _('Unknown')
-            title_counts[short_title] += 1
             section = {
                 'title': short_title, 'tfam': tfam, 'tsec': tsec, 'lsec': lsec, 'items': [], 'tooltip': tooltip_for(tfam), 'key': key,
             }
             smap.setdefault(key, section)['items'].append(h)
+            repeated_short_titles[short_title].add(key)
 
-        for section in smap.values():
-            if title_counts[section['title']] > 1:
-                if section['tfam']:
-                    section['title'] = ' ➤ '.join(section['tfam'])
-                elif section['tsec'] and section['lsec']:
-                    section['title'] = ' ➤ '.join((section['tsec'], section['lsec']))
+        for keys in repeated_short_titles.values():
+            if len(keys) > 1:
+                for key in keys:
+                    section = smap[key]
+                    if section['tfam']:
+                        section['title'] = ' ➤ '.join(tfam)
+                    elif section['tsec'] and section['lsec']:
+                        section['title'] = ' ➤ '.join((section['tsec'], section['lsec']))
 
         for secnum, (sec_key, sec) in enumerate(smap.items()):
             section = QTreeWidgetItem([sec['title']], 1)
@@ -480,7 +453,6 @@ class NotesDisplay(Details):
 
 class HighlightsPanel(QWidget):
 
-    jump_to_cfi = pyqtSignal(object)
     request_highlight_action = pyqtSignal(object, object)
     web_action = pyqtSignal(object, object)
     toggle_requested = pyqtSignal()
@@ -506,6 +478,7 @@ class HighlightsPanel(QWidget):
         h.edit_requested.connect(self.edit_highlight)
         h.edit_notes_requested.connect(self.edit_notes)
         h.current_highlight_changed.connect(self.current_highlight_changed)
+        h.export_selected_requested.connect(self.export_selected)
         self.load = h.load
         self.refresh = h.refresh
 
@@ -557,6 +530,9 @@ class HighlightsPanel(QWidget):
         self.highlights.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def jump_to_highlight(self, highlight):
+        boss = get_boss()
+        if boss.check_for_read_aloud(_('the location of this highlight')):
+            return
         self.request_highlight_action.emit(highlight['uuid'], 'goto')
 
     def current_highlight_changed(self, highlight):
@@ -571,6 +547,9 @@ class HighlightsPanel(QWidget):
             'No highlight is currently selected'), show=True)
 
     def edit_highlight(self):
+        boss = get_boss()
+        if boss.check_for_read_aloud(_('the location of this highlight')):
+            return
         h = self.highlights.current_highlight
         if h is None:
             return self.no_selected_highlight()
@@ -597,6 +576,12 @@ class HighlightsPanel(QWidget):
         hl = list(self.highlights.all_highlights)
         if not hl:
             return error_dialog(self, _('No highlights'), _('This book has no highlights to export'), show=True)
+        Export(hl, self).exec()
+
+    def export_selected(self):
+        hl = list(self.highlights.selected_highlights)
+        if not hl:
+            return error_dialog(self, _('No highlights'), _('No highlights selected to export'), show=True)
         Export(hl, self).exec()
 
     def selected_text_changed(self, text, annot_id):

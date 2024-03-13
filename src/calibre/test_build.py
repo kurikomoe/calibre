@@ -61,9 +61,11 @@ class BuildTest(unittest.TestCase):
         ldr = importlib.import_module('calibre').__spec__.loader.get_resource_reader()
         self.assertIn('ebooks', ldr.contents())
         try:
-            raw = ldr.open_resource('__init__.py').read()
+            with ldr.open_resource('__init__.py') as f:
+                raw = f.read()
         except FileNotFoundError:
-            raw = ldr.open_resource('__init__.pyc').read()
+            with ldr.open_resource('__init__.pyc') as f:
+                raw = f.read()
         self.assertGreater(len(raw), 1024)
 
     def test_regex(self):
@@ -123,9 +125,6 @@ class BuildTest(unittest.TestCase):
     def test_zeroconf(self):
         import ifaddr
         import zeroconf as z
-
-        from calibre.devices.smart_device_app.driver import monkeypatch_zeroconf
-        monkeypatch_zeroconf()
         del z
         del ifaddr
 
@@ -315,9 +314,10 @@ class BuildTest(unittest.TestCase):
         if is_sanitized:
             raise unittest.SkipTest('Skipping Qt build test as sanitizer is enabled')
         from qt.core import (
-            QApplication, QFontDatabase, QImageReader, QNetworkAccessManager,
-            QSslSocket, QTimer,
+            QApplication, QFontDatabase, QImageReader, QLoggingCategory,
+            QNetworkAccessManager, QSslSocket, QTimer,
         )
+        QLoggingCategory.setFilterRules('''qt.webenginecontext.debug=true''')
         from qt.webengine import QWebEnginePage
 
         from calibre.utils.img import image_from_data, image_to_data, test
@@ -374,7 +374,12 @@ class BuildTest(unittest.TestCase):
                 p.runJavaScript('1 + 1', callback)
                 p.printToPdf(print_callback)
 
+            def render_process_crashed(status, exit_code):
+                print('Qt WebEngine Render process crashed with status:', status, 'and exit code:', exit_code)
+                QApplication.instance().quit()
+
             p.titleChanged.connect(do_webengine_test)
+            p.renderProcessTerminated.connect(render_process_crashed)
             p.runJavaScript(f'document.title = "test-run-{os.getpid()}";')
             timeout = 10
             QTimer.singleShot(timeout * 1000, lambda: QApplication.instance().quit())
@@ -401,8 +406,8 @@ class BuildTest(unittest.TestCase):
         except ImportError:
             from PIL import _imaging, _imagingft, _imagingmath
         _imaging, _imagingmath, _imagingft
-        from PIL import features
         from io import StringIO
+        from PIL import features
         out = StringIO()
         features.pilinfo(out=out, supported_formats=False)
         out = out.getvalue()
@@ -417,10 +422,10 @@ class BuildTest(unittest.TestCase):
         --- ZLIB (PNG/ZIP) support ok
         '''.splitlines():
             self.assertIn(line.strip(), out)
-        i = Image.open(I('lt.png', allow_user_override=False))
-        self.assertGreaterEqual(i.size, (20, 20))
-        i = Image.open(P('catalog/DefaultCover.jpg', allow_user_override=False))
-        self.assertGreaterEqual(i.size, (20, 20))
+        with Image.open(I('lt.png', allow_user_override=False)) as i:
+            self.assertGreaterEqual(i.size, (20, 20))
+        with Image.open(P('catalog/DefaultCover.jpg', allow_user_override=False)) as i:
+            self.assertGreaterEqual(i.size, (20, 20))
 
     @unittest.skipUnless(iswindows and not is_ci, 'File dialog helper only used on windows (non-continuous-integration)')
     def test_file_dialog_helper(self):
@@ -506,6 +511,21 @@ class BuildTest(unittest.TestCase):
             cafile = ssl.get_default_verify_paths().cafile
             if not cafile or not cafile.endswith('/mozilla-ca-certs.pem') or not os.access(cafile, os.R_OK):
                 raise AssertionError('Mozilla CA certs not loaded')
+        # On Fedora create_default_context() succeeds in the main thread but
+        # not in other threads, because upstream OpenSSL cannot read whatever
+        # shit Fedora puts in /etc/ssl, so this check makes sure our bundled
+        # OpenSSL is built with ssl dir that is not /etc/ssl
+        from threading import Thread
+        certs_loaded = False
+        def check_ssl_loading_certs():
+            nonlocal certs_loaded
+            ssl.create_default_context()
+            certs_loaded = True
+        t = Thread(target=check_ssl_loading_certs)
+        t.start()
+        t.join()
+        if not certs_loaded:
+            raise AssertionError('Failed to load SSL certificates')
 
 
 def test_multiprocessing():

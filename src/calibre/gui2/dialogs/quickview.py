@@ -152,7 +152,7 @@ class Quickview(QDialog, Ui_Quickview):
     tab_pressed_signal       = pyqtSignal(object, object)
     quickview_closed         = pyqtSignal()
 
-    def __init__(self, gui, row, toggle_shortcut):
+    def __init__(self, gui, row, toggle_shortcut, focus_booklist_shortcut=None):
         self.is_pane = gprefs.get('quickview_is_pane', False)
         if not self.is_pane:
             QDialog.__init__(self, None, flags=Qt.WindowType.Window)
@@ -269,7 +269,7 @@ class Quickview(QDialog, Ui_Quickview):
             # Remove the ampersands from the buttons because shortcuts exist.
             self.lock_qv.setText(_('Lock Quickview contents'))
             self.refresh_button.setText(_('Refresh'))
-            self.gui.quickview_splitter.add_quickview_dialog(self)
+            self.gui.layout_container.set_widget('quick_view', self)
             self.close_button.setVisible(False)
         else:
             self.dock_button.setToolTip(_('Embed the Quickview panel into the main calibre window'))
@@ -296,14 +296,24 @@ class Quickview(QDialog, Ui_Quickview):
 
         # Add the quickview toggle as a shortcut for the close button
         # Don't add it if it identical to the current &X shortcut because that
-        # breaks &X
-        if (not self.is_pane and toggle_shortcut and
-                             self.close_button.shortcut() != toggle_shortcut):
-            toggle_sc = QShortcut(toggle_shortcut, self.close_button)
-            toggle_sc.activated.connect(lambda: self.close_button_clicked())
-            toggle_sc.setEnabled(True)
-            self.close_button.setToolTip(_('Alternate shortcut: ') +
-                                         toggle_shortcut.toString())
+        # breaks &X. Also add the focus booklist shortcut
+        if not self.is_pane:
+            if toggle_shortcut and self.close_button.shortcut() != toggle_shortcut:
+                toggle_sc = QShortcut(toggle_shortcut, self.close_button)
+                toggle_sc.activated.connect(lambda: self.close_button_clicked())
+                toggle_sc.setEnabled(True)
+                self.close_button.setToolTip(_('Alternate shortcut: ') +
+                                             toggle_shortcut.toString())
+            if focus_booklist_shortcut is not None:
+                toggle_sc = QShortcut(focus_booklist_shortcut, self)
+                toggle_sc.activated.connect(self.focus_booklist)
+                toggle_sc.setEnabled(True)
+
+    def focus_booklist(self):
+        from calibre.gui2.ui import get_gui
+        gui = get_gui()
+        gui.activateWindow()
+        gui.focus_current_view()
 
     def delayed_slave(self, current, func=None, dex=None):
         self.slave_timers[dex].stop()
@@ -314,7 +324,7 @@ class Quickview(QDialog, Ui_Quickview):
         t.start()
 
     def item_doubleclicked(self, item):
-        tb = self.gui.stack.tb_widget
+        tb = self.gui.tb_widget
         tb.set_focus_to_find_box()
         tb.item_search.lineEdit().setText(self.current_key + ':=' + item.text())
         tb.do_find()
@@ -446,7 +456,7 @@ class Quickview(QDialog, Ui_Quickview):
     def show(self):
         QDialog.show(self)
         if self.is_pane:
-            self.gui.quickview_splitter.show_quickview_widget()
+            self.gui.show_panel('quick_view')
 
     def show_as_pane_changed(self):
         gprefs['quickview_is_pane'] = not gprefs.get('quickview_is_pane', False)
@@ -697,10 +707,6 @@ class Quickview(QDialog, Ui_Quickview):
     def resizeEvent(self, *args):
         QDialog.resizeEvent(self, *args)
 
-        # Do this if we are resizing for the first time to reset state.
-        if self.is_pane and self.height() == 0:
-            self.gui.quickview_splitter.set_sizes()
-
         if self.books_table_column_widths is not None:
             for c,w in enumerate(self.books_table_column_widths):
                 self.books_table.setColumnWidth(c, w)
@@ -857,9 +863,10 @@ class Quickview(QDialog, Ui_Quickview):
             self._reject()
 
     def _reject(self):
+        gui = self.gui
         if self.is_pane:
-            self.gui.quickview_splitter.hide_quickview_widget()
-        self.gui.library_view.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+            gui.hide_panel('quick_view')
+        gui.library_view.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
         self._close()
         QDialog.reject(self)
 

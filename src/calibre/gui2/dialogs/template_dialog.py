@@ -339,7 +339,7 @@ class TemplateDialog(QDialog, Ui_TemplateDialog):
             QDialog.__init__(self, parent, flags=Qt.WindowType.Dialog)
         else:
             QDialog.__init__(self, None, flags=Qt.WindowType.Window)
-            self.raise_()  # Not needed on windows but here just in case
+            self.raise_and_focus()  # Not needed on windows but here just in case
         Ui_TemplateDialog.__init__(self)
         self.setupUi(self)
         self.setWindowIcon(self.windowIcon())
@@ -548,7 +548,7 @@ class TemplateDialog(QDialog, Ui_TemplateDialog):
                 elif fm[col]['datatype'] == 'bool':
                     mi.set(col, False)
                 elif fm[col]['is_multiple']:
-                    mi.set(col, (col,))
+                    mi.set(col, [col])
                 else:
                     mi.set(col, col, 1)
             mi = (mi, )

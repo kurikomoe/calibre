@@ -212,7 +212,7 @@ class KOBO(USBMS):
             debug_print(f"device_version_info - version_file={version_file}")
             if os.path.isfile(version_file):
                 debug_print("device_version_info - have opened version_file")
-                vf = open(version_file, "r")
+                vf = open(version_file)
                 self._device_version_info = vf.read().strip().split(",")
                 vf.close()
                 debug_print("device_version_info - self._device_version_info=", self._device_version_info)
@@ -1399,7 +1399,7 @@ class KOBOTOUCH(KOBO):
     # Starting with firmware version 3.19.x, the last number appears to be is a
     # build number. A number will be recorded here but it can be safely ignored
     # when testing the firmware version.
-    max_supported_fwversion         = (4, 37, 21533)
+    max_supported_fwversion         = (4, 38, 21908)
     # The following document firmware versions where new function or devices were added.
     # Not all are used, but this feels a good place to record it.
     min_fwversion_shelves           = (2, 0, 0)

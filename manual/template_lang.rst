@@ -415,7 +415,7 @@ Examples:
 
   * ``program: field('series') == 'foo'`` returns ``'1'`` if the book's series is 'foo', otherwise ``''``.
   * ``program: 'f.o' in field('series')`` returns ``'1'`` if the book's series matches the regular expression ``f.o`` (e.g., `foo`, `Off Onyx`, etc.), otherwise ``''``.
-  * ``program: 'science' inlist field('#genre')`` returns ``'1'`` if any of the book's genres match the regular expression ``science``, e.g., `Science`, `History of Science`, `Science Fiction` etc.), otherwise ``''``.
+  * ``program: 'science' inlist field('#genre')`` returns ``'1'`` if any of the book's genres match the regular expression ``science``, e.g., `Science`, `History of Science`, `Science Fiction` etc., otherwise ``''``.
   * ``program: '^science$' inlist field('#genre')`` returns ``'1'`` if any of the book's genres exactly match the regular expression ``^science$``, e.g., `Science`. The genres `History of Science` and `Science Fiction` don't match. If there isn't a match then returns ``''``.
   * ``program: if field('series') != 'foo' then 'bar' else 'mumble' fi`` returns ``'bar'`` if the book's series is not ``foo``. Otherwise it returns ``'mumble'``.
   * ``program: if field('series') == 'foo' || field('series') == '1632' then 'yes' else 'no' fi`` returns ``'yes'`` if series is either ``'foo'`` or ``'1632'``, otherwise ``'no'``.
@@ -552,10 +552,33 @@ In `GPM` the functions described in `Single Function Mode` all require an additi
 
    format_date(raw_field('pubdate'), 'yyyy')
 
+* ``format_date_field(field_name, format_string)`` -- format the value in the field ``field_name``, which must be the lookup name of date field, either standard or custom. See ``format_date()`` for the formatting codes. This function is much faster than format_date and should be used when you are formatting the value in a field (column). It can't be used for computed dates or dates in string variables. Examples::
+
+   format_date_field('pubdate', 'yyyy.MM.dd')
+   format_date_field('#date_read', 'MMM dd, yyyy')
+
 * ``formats_modtimes(date_format_string)`` -- return a comma-separated list of colon-separated items ``FMT:DATE`` representing modification times for the formats of a book. The ``date_format_string`` parameter specifies how the date is to be formatted. See the ``format_date()`` function for details. You can use the ``select`` function to get the modification time for a specific format. Note that format names are always uppercase, as in EPUB.
 * ``formats_paths()`` -- return a comma-separated list of colon-separated items ``FMT:PATH`` giving the full path to the formats of a book. You can use the select function to get the path for a specific format. Note that format names are always uppercase, as in EPUB.
 * ``formats_sizes()`` -- return a comma-separated list of colon-separated ``FMT:SIZE`` items giving the sizes in bytes of the formats of a book. You can use the select function to get the size for a specific format. Note that format names are always uppercase, as in EPUB.
 * ``fractional_part(x)`` -- returns the value after the decimal point. For example, ``fractional_part(3.14)`` returns ``0.14``. Throws an exception if ``x`` is not a number.
+* ``get_link(field_name, field_value)`` -- fetch the link for field ``field_name`` with value ``field_value``. If there is no attached link, return the empty string. Examples:
+
+ * The following returns the link attached to the tag ``Fiction``::
+
+    get_link('tags', 'Fiction')
+
+ * This template makes a list of the links for all the tags associated with a book in the form ``value:link, ...``::
+
+    program:
+     ans = '';
+     for t in $tags:
+         l = get_link('tags', t);
+         if l then
+             ans = list_join(', ', ans, ',', t & ':' & get_link('tags', t), ',')
+         fi
+     rof;
+     ans
+
 * ``has_cover()`` -- return ``'Yes'`` if the book has a cover, otherwise the empty string.
 * ``has_extra_files([pattern])`` -- returns the count of extra files, otherwise '' (the empty string). If the optional parameter ``pattern`` (a regular expression) is supplied then the list is filtered to files that match ``pattern`` before the files are counted. The pattern match is case insensitive. See also the functions ``extra_file_names()``, ``extra_file_size()`` and ``extra_file_modtime()``. This function can be used only in the GUI.
 * ``identifier_in_list(val, id_name [, found_val, not_found_val])`` -- treat ``val`` as a list of identifiers separated by commas. An identifier has the format ``id_name:value``. The ``id_name`` parameter is the id_name text to search for, either ``id_name`` or ``id_name:regexp``. The first case matches if there is any identifier matching that id_name. The second case matches if id_name matches an identifier and the regexp matches the identifier's value. If ``found_val`` and ``not_found_val`` are provided then if there is a match then return ``found_val``, otherwise return ``not_found_val``. If ``found_val`` and ``not_found_val`` are not provided then if there is a match then return the ``identifier:value`` pair, otherwise the empty string (``''``).
@@ -852,7 +875,7 @@ To accomplish this, we:
 
 1. Create a composite field (give it lookup name #aa) containing ``{series}/{series_index} - {title}``. If the series is not empty, then this template will produce `series/series_index - title`.
 2. Create a composite field (give it lookup name #bb) containing ``{#genre:ifempty(Unknown)}/{author_sort}/{title}``. This template produces `genre/author_sort/title`, where an empty genre is replaced with `Unknown`.
-3. Set the save template to ``{series:lookup(.,#aa,#bb}``. This template chooses composite field ``#aa`` if series is not empty and composite field ``#bb`` if series is empty. We therefore have two completely different save paths, depending on whether or not `series` is empty.
+3. Set the save template to ``{series:lookup(.,#aa,#bb)}``. This template chooses composite field ``#aa`` if series is not empty and composite field ``#bb`` if series is empty. We therefore have two completely different save paths, depending on whether or not `series` is empty.
 
 Tips
 -----

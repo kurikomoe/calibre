@@ -379,9 +379,10 @@ cover_trim_fuzz_value = 10
 
 #: Control behavior of the book list
 # You can control the behavior of double clicks and pressing Enter on the books
-# list. Choices: open_viewer, do_nothing, show_book_details, edit_cell,
-# edit_metadata. Selecting anything other than open_viewer or show_book_details
-# has the side effect of disabling editing a field using a single click.
+# list. Choices: open_viewer, do_nothing, show_book_details,
+# show_locked_book_details, edit_cell, edit_metadata. Selecting anything other
+# than open_viewer, show_book_details, or show_locked_book_details has the side
+# effect of disabling editing a field using a single click.
 # Default: open_viewer.
 # Example: doubleclick_on_library_view = 'do_nothing'
 # You can also control whether the book list scrolls per item or
@@ -574,3 +575,8 @@ allow_template_database_functions_in_composites = False
 # for https://whatever URLs. %u is replaced by the URL to be opened. The scheme
 # takes a glob pattern allowing a single entry to match multiple URL types.
 openers_by_scheme = {}
+
+#: Set the first day of the week for calendar popups
+# It must be one of the values Default, Sunday, Monday, Tuesday, Wednesday,
+# Thursday, Friday, or Saturday, all in English, spelled exactly as shown.
+calendar_start_day_of_week = 'Default'

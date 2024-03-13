@@ -15,14 +15,16 @@ import traceback
 from collections import defaultdict, namedtuple
 from itertools import groupby
 from qt.core import (
-    QAbstractTableModel, QApplication, QColor, QDateTime, QFont, QFontMetrics, QIcon,
-    QImage, QModelIndex, QPainter, QPixmap, Qt, pyqtSignal,
+    QAbstractTableModel, QApplication, QColor, QFont, QFontMetrics, QIcon, QImage,
+    QModelIndex, QPainter, QPixmap, Qt, pyqtSignal,
 )
 
 from calibre import (
     fit_image, human_readable, isbytestring, prepare_string_for_xml, strftime,
 )
-from calibre.constants import DEBUG, config_dir, dark_link_color, filesystem_encoding
+from calibre.constants import (
+    DEBUG, config_dir, dark_link_color, filesystem_encoding
+)
 from calibre.db.search import CONTAINS_MATCH, EQUALS_MATCH, REGEXP_MATCH, _match
 from calibre.db.utils import force_to_bool
 from calibre.ebooks.metadata import authors_to_string, fmt_sidx, string_to_authors
@@ -34,7 +36,7 @@ from calibre.library.save_to_disk import find_plugboard
 from calibre.ptempfile import PersistentTemporaryFile
 from calibre.utils.config import device_prefs, prefs, tweaks
 from calibre.utils.date import (
-    UNDEFINED_DATE, as_local_time, dt_factory, is_date_undefined, qt_to_dt,
+    UNDEFINED_DATE, dt_factory, is_date_undefined, qt_from_dt, qt_to_dt,
 )
 from calibre.utils.icu import sort_key
 from calibre.utils.localization import calibre_langcode_to_name, ngettext
@@ -915,11 +917,11 @@ class BooksModel(QAbstractTableModel):  # {{{
                             return (text) if force_to_bool(text) is None else None
                     else:
                         def func(idx):
-                            return (fffunc(field_obj, idfunc(idx), default_value=''))
+                            return fffunc(field_obj, idfunc(idx), default_value='')
             elif dt == 'datetime':
                 def func(idx):
                     val = fffunc(field_obj, idfunc(idx), default_value=UNDEFINED_DATE)
-                    return None if is_date_undefined(val) else QDateTime(as_local_time(val))
+                    return None if is_date_undefined(val) else qt_from_dt(val)
             elif dt == 'rating':
                 rating_fields[field] = m['display'].get('allow_half_stars', False)
 

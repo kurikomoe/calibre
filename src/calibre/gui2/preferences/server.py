@@ -121,7 +121,7 @@ class Int(QSpinBox):
 
     def __init__(self, name, layout):
         QSpinBox.__init__(self)
-        self.setRange(0, 20000)
+        self.setRange(0, 99999)
         opt = options[name]
         self.valueChanged.connect(self.changed_signal.emit)
         init_opt(self, opt, layout)
@@ -1299,13 +1299,12 @@ class ConfigWidget(ConfigWidgetBase):
         self.stopping_msg.accept()
 
     def test_server(self):
+        from calibre.utils.network import format_addr_for_url, get_fallback_server_addr
         prefix = self.advanced_tab.get('url_prefix') or ''
         protocol = 'https' if self.advanced_tab.has_ssl else 'http'
-        lo = self.advanced_tab.get('listen_on') or '0.0.0.0'
-        lo = {'0.0.0.0': '127.0.0.1', '::':'::1'}.get(lo)
-        url = '{protocol}://{interface}:{port}{prefix}'.format(
-            protocol=protocol, interface=lo,
-            port=self.main_tab.opt_port.value(), prefix=prefix)
+        addr = self.advanced_tab.get('listen_on') or get_fallback_server_addr()
+        addr = {'0.0.0.0': '127.0.0.1', '::': '::1'}.get(addr, addr)
+        url = f'{protocol}://{format_addr_for_url(addr)}:{self.main_tab.opt_port.value()}{prefix}'
         open_url(QUrl(url))
 
     def view_server_logs(self):

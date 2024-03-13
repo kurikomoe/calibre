@@ -12,7 +12,7 @@ from contextlib import suppress
 from io import BytesIO
 from qt.core import (
     QBuffer, QByteArray, QColor, QImage, QImageReader, QImageWriter, QIODevice, QPixmap,
-    Qt, QTransform,
+    Qt, QTransform, qRgba
 )
 from threading import Thread
 
@@ -272,7 +272,12 @@ def save_cover_data_to(
         changed = True
         img = img.scaled(int(resize_to[0]), int(resize_to[1]), Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
     owidth, oheight = img.width(), img.height()
-    nwidth, nheight = tweaks['maximum_cover_size'] if minify_to is None else minify_to
+    if minify_to is None:
+        nwidth, nheight = tweaks['maximum_cover_size']
+        nwidth, nheight = max(1, nwidth), max(1, nheight)
+    else:
+        nwidth, nheight = minify_to
+
     if letterbox:
         img = blend_on_canvas(img, nwidth, nheight, bgcolor=letterbox_color)
         # Check if we were minified
@@ -578,10 +583,17 @@ def run_optimizer(file_path, cmd, as_filter=False, input_data=None):
             outw.start()
         raw = force_unicode(stderr.read())
         if p.wait() != 0:
+            p.stdout.close()
+            if as_filter:
+                p.stderr.close()
+                p.stdin.close()
             return raw
         else:
             if as_filter:
                 outw.join(60.0), inw.join(60.0)
+                p.stdin.close()
+                p.stderr.close()
+            p.stdout.close()
             try:
                 sz = os.path.getsize(outfile)
             except OSError:
@@ -645,13 +657,73 @@ def encode_jpeg(file_path, quality=80):
     buf.open(QIODevice.OpenModeFlag.WriteOnly)
     if not img.save(buf, 'PPM'):
         raise ValueError('Failed to export image to PPM')
-    return run_optimizer(file_path, cmd, as_filter=True, input_data=ReadOnlyFileBuffer(ba.data()))
+    data = ReadOnlyFileBuffer(ba.data())
+    buf.close()
+    return run_optimizer(file_path, cmd, as_filter=True, input_data=data)
 
 
 def encode_webp(file_path, quality=75, m=6, metadata='all'):
     return run_cwebp(file_path, False, quality, m, metadata)
 # }}}
 
+# PIL images {{{
+def align8to32(bytes, width, mode):
+    """
+    converts each scanline of data from 8 bit to 32 bit aligned
+    """
+
+    bits_per_pixel = {"1": 1, "L": 8, "P": 8, "I;16": 16}[mode]
+
+    # calculate bytes per line and the extra padding if needed
+    bits_per_line = bits_per_pixel * width
+    full_bytes_per_line, remaining_bits_per_line = divmod(bits_per_line, 8)
+    bytes_per_line = full_bytes_per_line + (1 if remaining_bits_per_line else 0)
+
+    extra_padding = -bytes_per_line % 4
+
+    # already 32 bit aligned by luck
+    if not extra_padding:
+        return bytes
+
+    new_data = [
+        bytes[i * bytes_per_line : (i + 1) * bytes_per_line] + b"\x00" * extra_padding
+        for i in range(len(bytes) // bytes_per_line)
+    ]
+
+    return b"".join(new_data)
+
+
+def convert_PIL_image_to_pixmap(im, device_pixel_ratio=1.0):
+    data = None
+    colortable = None
+    if im.mode == "RGBA":
+        fmt = QImage.Format.Format_RGBA8888
+        data = im.tobytes("raw", "RGBA")
+    elif im.mode == "1":
+        fmt = QImage.Format.Format_Mono
+    elif im.mode == "L":
+        fmt = QImage.Format.Format_Indexed8
+        colortable = [qRgba(i, i, i, 255) & 0xFFFFFFFF for i in range(256)]
+    elif im.mode == "P":
+        fmt = QImage.Format.Format_Indexed8
+        palette = im.getpalette()
+        colortable = [qRgba(*palette[i : i + 3], 255) & 0xFFFFFFFF for i in range(0, len(palette), 3)]
+    elif im.mode == "I;16":
+        im = im.point(lambda i: i * 256)
+        fmt = QImage.Format.Format_Grayscale16
+    else:
+        fmt = QImage.Format.Format_RGBX8888
+        data = im.convert("RGBA").tobytes("raw", "RGBA")
+
+    size = im.size
+    data = data or align8to32(im.tobytes(), size[0], im.mode)
+    qimg = QImage(data, size[0], size[1], fmt)
+    if device_pixel_ratio != 1.0:
+        qimg.setDevicePixelRatio(device_pixel_ratio)
+    if colortable:
+        qimg.setColorTable(colortable)
+    return QPixmap.fromImage(qimg)
+# }}}
 
 def test():  # {{{
     from glob import glob
@@ -684,9 +756,11 @@ def test():  # {{{
     despeckle_image(img)
     remove_borders_from_image(img)
     image_to_data(img, fmt='GIF')
-    raw = subprocess.Popen([get_exe_path('JxrDecApp'), '-h'],
+    p = subprocess.Popen([get_exe_path('JxrDecApp'), '-h'],
                            creationflags=subprocess.DETACHED_PROCESS if iswindows else 0,
-                           stdout=subprocess.PIPE).stdout.read()
+                           stdout=subprocess.PIPE)
+    raw, _ = p.communicate()
+    p.wait()
     if b'JPEG XR Decoder Utility' not in raw:
         raise SystemExit('Failed to run JxrDecApp')
 # }}}

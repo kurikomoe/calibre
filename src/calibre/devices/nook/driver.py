@@ -57,7 +57,7 @@ class NOOK(USBMS):
 
             cover = Image.new('RGB', (96, 144), 'black')
             im = Image.open(io.BytesIO(coverdata))
-            im.thumbnail((96, 144), Image.ANTIALIAS)
+            im.thumbnail((96, 144), Image.Resampling.LANCZOS)
 
             x, y = im.size
             cover.paste(im, ((96-x)/2, (144-y)/2))
@@ -86,12 +86,14 @@ class NOOK_COLOR(NOOK):
         0x002, 0x003, 0x004,
         0x005,  # Nook HD+
         0x007,  # Glowlight from 2013
+        # 0xa,    # Glowlight from 2016 is MTP based device
         0xb,    # Glowlight from 2017
         0xc,    # Glowlight from 2019
         0xd,    # Glowlight from 2021
-        0xe,    # Glowlight from 2021
+        0xe,    # Glowlight from 2022
+        # 0xf,    # Glowlight from 2023 is MTP based device
     ]
-    BCD         = [0x216, 0x9999, 0x409]
+    BCD         = [0x216, 0x9999, 0x409, 0x440]
 
     WINDOWS_MAIN_MEM = WINDOWS_CARD_A_MEM = ['EBOOK_DISK', 'NOOK_TABLET',
             'NOOK_SIMPLETOUCH', 'NOOK_GLOWLIGHT']

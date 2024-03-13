@@ -800,7 +800,7 @@ class BasicNewsRecipe(Recipe):
         `weights`: A dictionary that maps weights to titles. If any titles
         in index are not in weights, they are assumed to have a weight of 0.
         '''
-        weights = defaultdict(lambda: 0, weights)
+        weights = defaultdict(int, weights)
         index.sort(key=lambda x: weights[x])
         return index
 
@@ -852,6 +852,11 @@ class BasicNewsRecipe(Recipe):
         every article URL. It should return the path to a file on the filesystem
         that contains the article HTML. That file is processed by the recursive
         HTML fetching engine, so it can contain links to pages/images on the web.
+        Alternately, you can return a dictionary of the form:
+        {'data': <HTML data>, 'url': <the resolved URL of the article>}. This avoids
+        needing to create temporary files. The `url` key in the dictionary is useful if
+        the effective URL of the article is different from the URL passed into this method,
+        for example, because of redirects. It can be omitted if the URL is unchanged.
 
         This method is typically useful for sites that try to make it difficult to
         access article content automatically.
@@ -1027,7 +1032,7 @@ class BasicNewsRecipe(Recipe):
         for attr in self.remove_attributes:
             for x in soup.findAll(attrs={attr:True}):
                 del x[attr]
-        for bad_tag in list(soup.findAll(['base', 'iframe', 'canvas', 'embed',
+        for bad_tag in list(soup.findAll(['base', 'iframe', 'canvas', 'embed', 'button',
             'command', 'datalist', 'video', 'audio', 'noscript', 'link', 'meta'])):
             # link tags can be used for preloading causing network activity in
             # calibre viewer. meta tags can do all sorts of crazy things,
@@ -1143,7 +1148,7 @@ class BasicNewsRecipe(Recipe):
                 if bn:
                     bn = bn.rpartition('/')[-1]
                     if bn:
-                        img = os.path.join(imgdir, 'feed_image_%d%s'%(self.image_counter, os.path.splitext(bn)))
+                        img = os.path.join(imgdir, 'feed_image_%d%s'%(self.image_counter, os.path.splitext(bn)[-1]))
                         try:
                             with open(img, 'wb') as fi, closing(self.browser.open(feed.image_url, timeout=self.timeout)) as r:
                                 fi.write(r.read())
@@ -1163,7 +1168,7 @@ class BasicNewsRecipe(Recipe):
         return templ.generate(f, feeds, self.description_limiter,
                               extra_css=css).render(doctype='xhtml')
 
-    def _fetch_article(self, url, dir_, f, a, num_of_feeds):
+    def _fetch_article(self, url, dir_, f, a, num_of_feeds, preloaded=None):
         br = self.browser
         if hasattr(self.get_browser, 'is_base_class_implementation'):
             # We are using the default get_browser, which means no need to
@@ -1180,6 +1185,8 @@ class BasicNewsRecipe(Recipe):
         fetcher.current_dir = dir_
         fetcher.show_progress = False
         fetcher.image_url_processor = self.image_url_processor
+        if preloaded is not None:
+            fetcher.preloaded_urls[url] = preloaded
         res, path, failures = fetcher.start_fetch(url), fetcher.downloaded_paths, fetcher.failed_links
         if not res or not os.path.exists(res):
             msg = _('Could not fetch article.') + ' '
@@ -1195,9 +1202,17 @@ class BasicNewsRecipe(Recipe):
         return self._fetch_article(url, dir, f, a, num_of_feeds)
 
     def fetch_obfuscated_article(self, url, dir, f, a, num_of_feeds):
-        path = os.path.abspath(self.get_obfuscated_article(url))
-        url = ('file:'+path) if iswindows else ('file://'+path)
-        return self._fetch_article(url, dir, f, a, num_of_feeds)
+        x = self.get_obfuscated_article(url)
+        if isinstance(x, dict):
+            data = x['data']
+            if isinstance(data, str):
+                data = data.encode(self.encoding or 'utf-8')
+            url = x.get('url', url)
+        else:
+            with open(x, 'rb') as of:
+                data = of.read()
+            os.remove(x)
+        return self._fetch_article(url, dir, f, a, num_of_feeds, preloaded=data)
 
     def fetch_embedded_article(self, article, dir, f, a, num_of_feeds):
         templ = templates.EmbeddedContent()

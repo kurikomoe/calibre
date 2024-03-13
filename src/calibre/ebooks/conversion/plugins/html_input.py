@@ -8,12 +8,15 @@ __docformat__ = 'restructuredtext en'
 import os
 import re
 import tempfile
+from contextlib import suppress
 from functools import partial
 from urllib.parse import quote
 
-from calibre.constants import isbsd, islinux
+from calibre.constants import filesystem_encoding, isbsd, islinux
 from calibre.customize.conversion import InputFormatPlugin, OptionRecommendation
-from calibre.utils.filenames import ascii_filename, get_long_path_name
+from calibre.utils.filenames import (
+    ascii_filename, case_ignoring_open_file, get_long_path_name,
+)
 from calibre.utils.imghdr import what
 from calibre.utils.localization import __, get_lang
 from polyglot.builtins import as_unicode
@@ -88,8 +91,11 @@ class HTMLInput(InputFormatPlugin):
 
         fname = None
         if hasattr(stream, 'name'):
-            basedir = os.path.dirname(stream.name)
-            fname = os.path.basename(stream.name)
+            sname = stream.name
+            if isinstance(sname, bytes):
+                sname = sname.decode(filesystem_encoding)
+            basedir = os.path.dirname(sname)
+            fname = os.path.basename(sname)
         self.set_root_dir_of_input(basedir)
 
         if file_ext != 'opf':
@@ -274,7 +280,7 @@ class HTMLInput(InputFormatPlugin):
         if not q.startswith(self.root_dir_of_input):
             if not self.opts.allow_local_files_outside_root:
                 if os.path.exists(q):
-                    self.log.warn('Not adding {} as it is outside the document root: {}'.format(q, self.root_dir_of_input))
+                    self.log.warn(f'Not adding {q} as it is outside the document root: {self.root_dir_of_input}')
                 return None, None
         return link, frag
 
@@ -290,7 +296,13 @@ class HTMLInput(InputFormatPlugin):
         except:
             return link_
         if not os.access(link, os.R_OK):
-            return link_
+            corrected = False
+            if getattr(self.opts, 'correct_case_mismatches', False):
+                with suppress(OSError), case_ignoring_open_file(link) as f:
+                    link = f.name
+                    corrected = True
+            if not corrected:
+                return link_
         if os.path.isdir(link):
             self.log.warn(link_, 'is a link to a directory. Ignoring.')
             return link_

@@ -194,6 +194,7 @@ class CreateVirtualLibrary(QDialog):  # {{{
             self.vl_name.lineEdit().textEdited.connect(self.name_text_edited)
 
         self.resize(self.sizeHint()+QSize(150, 25))
+        self.restore_geometry(gprefs, 'create-virtual-library-dialog')
 
     def search_text_changed(self, txt):
         db = self.gui.current_db
@@ -315,7 +316,12 @@ class CreateVirtualLibrary(QDialog):  # {{{
 
         self.library_name = n
         self.library_search = v
+        self.save_geometry(gprefs, 'create-virtual-library-dialog')
         QDialog.accept(self)
+
+    def reject(self):
+        self.save_geometry(gprefs, 'create-virtual-library-dialog')
+        QDialog.reject(self)
 # }}}
 
 
@@ -363,7 +369,7 @@ class SearchRestrictionMixin:
         virt_libs[name] = search
         db.new_api.set_pref('virtual_libraries', virt_libs)
         db.new_api.clear_search_caches()
-        self.library_view.model().db.refresh()
+        self.library_view.model().refresh()
 
     def do_create_edit(self, name=None):
         db = self.library_view.model().db
@@ -508,7 +514,7 @@ class SearchRestrictionMixin:
             'confirm_vl_removal', parent=self):
             return
         self._remove_vl(name, reapply=True)
-        self.library_view.model().db.refresh()
+        self.library_view.model().refresh()
 
     def choose_vl_triggerred(self):
         from calibre.gui2.tweak_book.widgets import QuickOpen, emphasis_style
