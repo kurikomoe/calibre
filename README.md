@@ -1,3 +1,6 @@
+建议使用：https://github.com/Cirn09/calibre-do-not-translate-my-path
+
+
 # Calibre 中文文件名修正
 
 ## Usage
